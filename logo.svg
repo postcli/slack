@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="384" height="384" shape-rendering="crispEdges">
+  <rect width="32" height="32" fill="#0d1117"/>
+
+  <!-- Big pixel "P" letter -->
+  <!-- Vertical bar -->
+  <rect x="8" y="4" width="4" height="24" fill="#4A154B"/>
+  <rect x="8" y="4" width="4" height="1" fill="#7C3085"/>
+  <rect x="8" y="4" width="1" height="24" fill="#7C3085"/>
+
+  <!-- Top horizontal -->
+  <rect x="12" y="4" width="10" height="4" fill="#4A154B"/>
+  <rect x="12" y="4" width="10" height="1" fill="#7C3085"/>
+
+  <!-- Right curve -->
+  <rect x="22" y="6" width="4" height="8" fill="#4A154B"/>
+  <rect x="25" y="8" width="1" height="4" fill="#36124A"/>
+
+  <!-- Bottom horizontal of P bowl -->
+  <rect x="12" y="14" width="10" height="4" fill="#4A154B"/>
+  <rect x="12" y="17" width="10" height="1" fill="#36124A"/>
+
+  <!-- Inner P space -->
+  <rect x="12" y="8" width="10" height="6" fill="#161b22"/>
+
+  <!-- Terminal cursor inside the P -->
+  <rect x="14" y="9" width="1" height="1" fill="#7ee787"/>
+  <rect x="16" y="9" width="4" height="1" fill="#c9d1d9"/>
+  <rect x="14" y="11" width="1" height="1" fill="#7ee787"/>
+  <rect x="16" y="11" width="5" height="1" fill="#f59e0b"/>
+  <rect x="21" y="11" width="1" height="1" fill="#e8e8e8">
+    <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- Subtle glow -->
+  <rect x="7" y="3" width="1" height="1" fill="#36124A"/>
+  <rect x="26" y="5" width="1" height="1" fill="#36124A"/>
+  <rect x="7" y="28" width="1" height="1" fill="#36124A"/>
+</svg>

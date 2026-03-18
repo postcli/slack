@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="logo.png" alt="postcli slack" width="80" />
+
 # @postcli/slack
 
 **Your entire Slack, from the terminal.**
