@@ -260,13 +260,54 @@ src/
 
 ## How Authentication Works
 
-PostCLI Slack extracts credentials directly from the Slack desktop app:
+PostCLI Slack extracts credentials directly from the Slack desktop app. No bot tokens, no OAuth apps, no admin approval needed.
 
-1. **Cookie `d`**: Read from Slack's SQLite cookie database (Flatpak, native, or snap paths)
-2. **Token `xoxc-`**: Extracted from Slack's LevelDB LocalStorage
-3. **Decryption**: Uses the same key derivation as Chrome/Electron (PBKDF2 with keyring password)
+### Two credentials, one session
 
-Credentials are stored at `~/.config/postcli/.env` with `0600` permissions (owner-only read/write). No data leaves your machine.
+Slack's web client uses two pieces to authenticate API calls:
+
+| Credential | Format | Scope | Where it lives |
+|------------|--------|-------|----------------|
+| **Cookie `d`** | `xoxd-...` (URL-encoded) | Shared across all workspaces | SQLite cookie DB (`Cookies` file) |
+| **Token `xoxc-`** | `xoxc-TEAM-USER-RANDOM-HASH` | One per workspace | LevelDB LocalStorage |
+
+The cookie `d` is a single session cookie stored at `.slack.com`, valid for every workspace you're logged into. The token `xoxc-` is workspace-specific and identifies which team you're acting on.
+
+### Where Slack stores them
+
+**Cookie DB (SQLite):**
+
+| Installation | Path |
+|---|---|
+| Flatpak | `~/.var/app/com.slack.Slack/config/Slack/Cookies` |
+| Native (deb/rpm) | `~/.config/Slack/Cookies` |
+| Snap | `~/snap/slack/common/.config/Slack/Cookies` |
+| macOS | `~/Library/Application Support/Slack/Cookies` |
+
+**Token storage (LevelDB):**
+
+Same base directory, under `Local Storage/leveldb/`. Tokens are written when you navigate to a workspace in the Slack app. If you only have one workspace active, only that token will be in storage. Navigate to other workspaces to make their tokens available.
+
+### Decryption
+
+The cookie `d` is encrypted with AES-128-CBC. The encryption key is derived via PBKDF2 from a password stored in the OS keyring:
+
+| OS | Keyring lookup |
+|---|---|
+| Linux | `secret-tool lookup application Slack` |
+| macOS | Keychain: "Slack Safe Storage" |
+
+This is the same key derivation that Chrome/Electron uses for its cookie encryption (PBKDF2 with `saltysalt`, 1 iteration on Linux, 1003 on macOS).
+
+### What `auth login` does
+
+1. Finds the Slack desktop app directory (Flatpak, native, snap, or macOS)
+2. Scans LevelDB files for `xoxc-` tokens (binary scan, no LevelDB library needed)
+3. Decrypts the `d` cookie from the SQLite database
+4. Calls `auth.test` with each token to identify the workspace name and user
+5. Saves the selected token + cookie to `~/.config/postcli/.env` (0600 permissions)
+
+No data leaves your machine. The saved credentials are the same ones your Slack desktop app uses.
 
 ## Contributing
 
