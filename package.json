@@ -1,0 +1,75 @@
+{
+  "name": "@postcli/slack",
+  "version": "0.1.0",
+  "description": "Slack plugin for PostCLI - browse channels, messages, threads and users from the terminal",
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/postcli/slack.git"
+  },
+  "homepage": "https://github.com/postcli/slack",
+  "bugs": "https://github.com/postcli/slack/issues",
+  "keywords": [
+    "slack",
+    "cli",
+    "mcp",
+    "messages",
+    "channels",
+    "postcli",
+    "ai",
+    "agents"
+  ],
+  "main": "./dist/plugin.js",
+  "types": "./dist/plugin.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/plugin.js",
+      "types": "./dist/plugin.d.ts"
+    },
+    "./client": {
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
+    },
+    "./mcp": {
+      "import": "./dist/mcp/index.js",
+      "types": "./dist/mcp/index.d.ts"
+    }
+  },
+  "bin": {
+    "postcli-slack": "dist/cli/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "cli": "tsx src/cli/index.ts",
+    "mcp": "tsx src/mcp/index.ts",
+    "dev:mcp": "npx @modelcontextprotocol/inspector tsx src/mcp/index.ts",
+    "test": "node --import tsx --test test/*.test.ts test/**/*.test.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^12.8.0",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "dotenv": "^16.5.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
