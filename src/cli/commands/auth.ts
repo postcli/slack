@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import readline from 'readline';
 import { createClient, getClient, getConfigDir, getEnvPath } from '../../client.js';
-import { grabSlackCookies } from '../chrome-cookies.js';
+import { grabSlackSession } from '../chrome-cookies.js';
 
 function ask(question: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -30,95 +30,35 @@ function saveCredentials(token: string, cookie: string, workspace: string) {
   writeFileSync(envPath, envContent, { mode: 0o600 });
 }
 
-async function bootstrapToken(cookie: string, workspace: string): Promise<string> {
-  // Use the d= cookie to call Slack's internal API and get the xoxc- token
-  // This mirrors what the Slack web client does on page load
-  const res = await fetch(`https://${workspace}.slack.com/api/client.boot`, {
-    method: 'POST',
-    headers: {
-      Cookie: `d=${cookie}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    },
-    body: new URLSearchParams({ _x_reason: 'postcli-bootstrap', _x_sonic: 'true' }).toString(),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to bootstrap token: HTTP ${res.status}`);
-  }
-
-  const data = await res.json() as any;
-  if (!data.ok) {
-    throw new Error(`Slack API error: ${data.error ?? 'unknown'}`);
-  }
-
-  const token = data.self?.token ?? data.api_token;
-  if (!token?.startsWith('xoxc-')) {
-    throw new Error('Could not extract xoxc- token from client.boot response');
-  }
-
-  return token;
-}
-
 export const authCommand = new Command('auth').description('Authentication management');
 
 authCommand
   .command('login')
-  .description('Login via Chrome cookies (must be logged into Slack in Chrome)')
-  .option('-w, --workspace <name>', 'Workspace to connect (e.g. "apache" from apache.slack.com)')
+  .description('Login via Slack desktop app session (auto-detects all workspaces)')
+  .option('-w, --workspace <name>', 'Workspace name to connect')
   .action(async (opts) => {
-    console.log(chalk.dim('Checking Chrome for existing Slack session...'));
-    const grabbed = grabSlackCookies();
+    console.log(chalk.dim('Reading Slack desktop app session...'));
+    const session = grabSlackSession();
 
-    if (!grabbed) {
-      console.log(chalk.red('No Slack session found in Chrome.'));
-      console.log(chalk.dim('Log into Slack in Chrome first, then try again.'));
+    if (!session) {
+      console.log(chalk.red('No Slack desktop app found or no active session.'));
+      console.log(chalk.dim('Make sure the Slack app is installed and you are logged in.'));
       console.log(chalk.dim('Or use: postcli-slack auth setup'));
       process.exit(1);
     }
 
-    // Try existing tokens from LocalStorage first
-    console.log(chalk.dim(`Found ${grabbed.tokens.length} token(s) from LocalStorage. Detecting workspaces...`));
+    console.log(chalk.dim(`Found ${session.tokens.length} token(s). Detecting workspaces...\n`));
 
-    const resolved: { token: string; user: string; team: string; url: string }[] = [];
-    for (const token of grabbed.tokens) {
+    // Resolve each token to its workspace via auth.test
+    const resolved: { token: string; user: string; team: string }[] = [];
+    for (const token of session.tokens) {
       try {
-        const client = createClient(token, grabbed.cookie, 'slack');
+        const client = createClient(token, session.cookie, 'slack');
         const auth = await client.authTest();
-        resolved.push({ token, user: auth.user, team: auth.team, url: '' });
-        console.log(chalk.dim(`  ${auth.team} (@${auth.user})`));
+        resolved.push({ token, user: auth.user, team: auth.team });
+        console.log(`  ${chalk.bold(auth.team)} (@${auth.user})`);
       } catch {
-        // token expired or invalid, skip
-      }
-    }
-
-    // If workspace flag is set and not found in existing tokens, bootstrap from cookie
-    if (opts.workspace && !resolved.find((r) => r.team.toLowerCase().includes(opts.workspace.toLowerCase()))) {
-      console.log(chalk.dim(`\nWorkspace "${opts.workspace}" not found in cached tokens. Bootstrapping via cookie...`));
-      try {
-        const token = await bootstrapToken(grabbed.cookie, opts.workspace);
-        const client = createClient(token, grabbed.cookie, 'slack');
-        const auth = await client.authTest();
-        resolved.push({ token, user: auth.user, team: auth.team, url: '' });
-        console.log(chalk.dim(`  ${auth.team} (@${auth.user})`));
-      } catch (err: any) {
-        console.log(chalk.dim(`  Bootstrap failed: ${err.message}`));
-      }
-    }
-
-    // If still no tokens, try bootstrapping from known workspace cookies
-    if (!resolved.length && grabbed.workspaces.length) {
-      console.log(chalk.dim(`\nNo valid tokens. Bootstrapping from ${grabbed.workspaces.length} workspace(s)...`));
-      for (const ws of grabbed.workspaces) {
-        try {
-          const token = await bootstrapToken(grabbed.cookie, ws);
-          const client = createClient(token, grabbed.cookie, 'slack');
-          const auth = await client.authTest();
-          resolved.push({ token, user: auth.user, team: auth.team, url: '' });
-          console.log(chalk.dim(`  ${auth.team} (@${auth.user})`));
-        } catch {
-          // skip failed workspaces
-        }
+        // expired token, skip
       }
     }
 
@@ -128,27 +68,26 @@ authCommand
     }
 
     let selected = resolved[0];
+
     if (opts.workspace) {
       const match = resolved.find((r) =>
         r.team.toLowerCase().includes(opts.workspace.toLowerCase())
       );
-      if (match) selected = match;
+      if (match) {
+        selected = match;
+      } else {
+        console.log(chalk.red(`\nWorkspace "${opts.workspace}" not found.`));
+        process.exit(1);
+      }
     } else if (resolved.length > 1) {
-      console.log('\nAvailable workspaces:');
+      console.log();
       resolved.forEach((r, i) => console.log(`  ${i + 1}. ${r.team} (@${r.user})`));
       const choice = await ask('\nSelect workspace (number): ');
       const idx = parseInt(choice) - 1;
       if (resolved[idx]) selected = resolved[idx];
     }
 
-    // Extract workspace subdomain from the team URL via auth.test
-    const client = createClient(selected.token, grabbed.cookie, 'slack');
-    const fullAuth = await client.authTest();
-    // We need the workspace subdomain for future API calls
-    // auth.test doesn't return it directly, but we can use slack.com/api/ which works without subdomain
-    const workspace = 'slack'; // use generic endpoint, token handles routing
-
-    saveCredentials(selected.token, grabbed.cookie, workspace);
+    saveCredentials(selected.token, session.cookie, 'slack');
     console.log(chalk.green(`\nConnected as ${chalk.bold(selected.user)} in workspace ${chalk.bold(selected.team)}`));
     console.log(chalk.green('Credentials saved to .env'));
   });
